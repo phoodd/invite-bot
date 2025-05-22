@@ -1,6 +1,6 @@
 const { Client, GatewayIntentBits, Partials, Events } = require('discord.js');
 const { config } = require('dotenv');
-config(); // Loads DISCORD_TOKEN and GUILD_ID from Railway env vars
+config(); // Load DISCORD_TOKEN and GUILD_ID from Railway environment variables
 
 const client = new Client({
   intents: [
@@ -8,7 +8,7 @@ const client = new Client({
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildInvites,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
+    GatewayIntentBits.MessageContent,
   ],
   partials: [Partials.GuildMember],
 });
@@ -24,7 +24,7 @@ client.once(Events.ClientReady, async () => {
   invites.set(guild.id, new Map(inviteList.map((invite) => [invite.code, invite.uses])));
 });
 
-// Invite tracking and assigning role
+// 🔁 Invite tracking and role assignment
 client.on(Events.GuildMemberAdd, async (member) => {
   const cachedInvites = invites.get(member.guild.id);
   const newInvites = await member.guild.invites.fetch();
@@ -39,7 +39,7 @@ client.on(Events.GuildMemberAdd, async (member) => {
   const inviter = usedInvite?.inviter;
   if (!inviter) return;
 
-  let inviterRole = await member.guild.roles.cache.find(
+  let inviterRole = member.guild.roles.cache.find(
     (role) => role.name === `Invited by ${inviter.username}`
   );
 
@@ -51,12 +51,15 @@ client.on(Events.GuildMemberAdd, async (member) => {
     });
   }
 
-  await member.roles.add(inviterRole);
+  await member.roles.add(inviterRole).catch(console.error);
 });
 
-// ✅ Message when a new text channel is created
+// 🆕 Message when a new text channel is created
 client.on(Events.ChannelCreate, async (channel) => {
-  if (channel.type === 0) { // 0 = GuildText
+  console.log(`🆕 Channel created: ${channel.name} (type: ${channel.type})`);
+
+  // Type 0 is GUILD_TEXT in discord.js v14
+  if (channel.type === 0) {
     try {
       await channel.send(
         "**How to apply:**\n\n" +
@@ -66,7 +69,7 @@ client.on(Events.ChannelCreate, async (channel) => {
         "- A little about your hobbies"
       );
     } catch (err) {
-      console.error(`❌ Could not send message to channel ${channel.name}:`, err.message);
+      console.error(`❌ Could not send message to #${channel.name}:`, err.message);
     }
   }
 });
