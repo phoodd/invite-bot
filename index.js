@@ -1,71 +1,73 @@
-require('dotenv').config();
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, Events } = require('discord.js');
+const { config } = require('dotenv');
+config(); // Loads DISCORD_TOKEN and GUILD_ID from Railway env vars
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildInvites,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
   ],
+  partials: [Partials.GuildMember],
 });
 
 const invites = new Map();
 
-client.once('ready', async () => {
+client.once(Events.ClientReady, async () => {
+  console.log(`🤖 Logged in as ${client.user.tag}`);
+
   const guild = await client.guilds.fetch(process.env.GUILD_ID);
   const inviteList = await guild.invites.fetch();
 
-  inviteList.forEach(inv => invites.set(inv.code, inv.uses));
-  console.log(`✅ Bot is ready. Logged in as ${client.user.tag}`);
+  invites.set(guild.id, new Map(inviteList.map((invite) => [invite.code, invite.uses])));
 });
 
-client.on('guildMemberAdd', async member => {
+// Invite tracking and assigning role
+client.on(Events.GuildMemberAdd, async (member) => {
+  const cachedInvites = invites.get(member.guild.id);
   const newInvites = await member.guild.invites.fetch();
-  let usedInvite = null;
 
-  for (const [code, invite] of newInvites) {
-    const prevUses = invites.get(code) || 0;
-    if (invite.uses > prevUses) {
-      usedInvite = invite;
-      break;
-    }
+  const usedInvite = newInvites.find((inv) => {
+    const prev = cachedInvites.get(inv.code);
+    return prev !== undefined && inv.uses > prev;
+  });
+
+  invites.set(member.guild.id, new Map(newInvites.map((inv) => [inv.code, inv.uses])));
+
+  const inviter = usedInvite?.inviter;
+  if (!inviter) return;
+
+  let inviterRole = await member.guild.roles.cache.find(
+    (role) => role.name === `Invited by ${inviter.username}`
+  );
+
+  if (!inviterRole) {
+    inviterRole = await member.guild.roles.create({
+      name: `Invited by ${inviter.username}`,
+      color: 'Random',
+      reason: 'Created invite role dynamically',
+    });
   }
 
-  invites.clear();
-  newInvites.forEach(inv => invites.set(inv.code, inv.uses));
+  await member.roles.add(inviterRole);
+});
 
-  const guild = member.guild;
-
-  if (usedInvite && usedInvite.inviter) {
-    // ✅ Create or get a role like: "Invited by Username"
-    const inviterTag = usedInvite.inviter.username;
-    const roleName = `${process.env.INVITED_ROLE_PREFIX} ${inviterTag}`;
-
-    let role = guild.roles.cache.find(r => r.name === roleName);
-    if (!role) {
-      role = await guild.roles.create({
-        name: roleName,
-        color: 'Blue',
-        reason: `Created by bot for invite tracking`,
-      });
+// ✅ Message when a new text channel is created
+client.on(Events.ChannelCreate, async (channel) => {
+  if (channel.type === 0) { // 0 = GuildText
+    try {
+      await channel.send(
+        "**How to apply:**\n\n" +
+        ":writing_hand: 1️⃣ ➜ Submit your https://monkeytype.com/ result (30 seconds). PC ONLY\n\n" +
+        ":microphone: 2️⃣ ➜ send us a voice note explaining:\n" +
+        "- Why you'd be a great fit,\n" +
+        "- A little about your hobbies"
+      );
+    } catch (err) {
+      console.error(`❌ Could not send message to channel ${channel.name}:`, err.message);
     }
-
-    await member.roles.add(role);
-    console.log(`${member.user.tag} joined using invite ${usedInvite.code} by ${inviterTag}`);
-  } else {
-    // 👻 If no invite detected → treat as vanity
-    const vanityRoleName = process.env.VANITY_ROLE_NAME;
-    let role = guild.roles.cache.find(r => r.name === vanityRoleName);
-    if (!role) {
-      role = await guild.roles.create({
-        name: vanityRoleName,
-        color: 'Green',
-        reason: `Vanity invite role`,
-      });
-    }
-
-    await member.roles.add(role);
-    console.log(`${member.user.tag} joined via vanity link or unknown invite.`);
   }
 });
 
