@@ -61,6 +61,8 @@ client.on(Events.ChannelCreate, async (channel) => {
   // Type 0 is GUILD_TEXT in discord.js v14
   if (channel.type === 0) {
     try {
+      await new Promise((res) => setTimeout(res, 6000)); // 6-second delay
+      
       await channel.send(
         "**How to apply:**\n\n" +
         ":writing_hand: 1️⃣ ➜ Submit your https://monkeytype.com/ result (30 seconds). PC ONLY\n\n" +
