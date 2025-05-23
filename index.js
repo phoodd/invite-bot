@@ -77,3 +77,29 @@ client.on(Events.ChannelCreate, async (channel) => {
 });
 
 client.login(process.env.DISCORD_TOKEN);
+
+
+const { EmbedBuilder } = require('discord.js');
+
+client.on(Events.MessageCreate, async (message) => {
+  if (message.author.bot) return;
+
+  if (message.content.toLowerCase() === '!faq') {
+    const faqEmbed = new EmbedBuilder()
+      .setTitle('📌 ONLYFANS CHATTER AGENCY – FAQ')
+      .setColor('#014AAD'); // Hot pink color
+      .addFields(
+  { name: '❓ How do I apply?', value: 'Submit your monkeytype score + a voice note.' },
+  { name: '📅 What are the work hours?', value: 'Flexible – you choose your shift.' }
+)
+
+    // Add empty fields for now; you can add them later with .addFields(...)
+    // Example:
+    // .addFields(
+    //   { name: '❓ What do we do?', value: 'We manage chats for OF creators.' },
+    //   { name: '💰 How much can I earn?', value: 'Up to €3,000/month depending on performance.' }
+    // );
+
+    await message.channel.send({ embeds: [faqEmbed] });
+  }
+});
