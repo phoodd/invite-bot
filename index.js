@@ -87,29 +87,29 @@ client.on(Events.MessageCreate, async (message) => {
   if (message.content.toLowerCase() === '!faq') {
     const faqEmbed = new EmbedBuilder()
       .setTitle('📌 X RECRUITMENT – FAQ')
-      .setColor('#014bac') // Hot pink
+      .setColor('#014bac') // Hot blue
 
       .addFields(
         {
           name: '❓ What is this agency?',
           value: 'We’re an OnlyFans chatting agency. We partner directly with top models, letting chatters handle fan interactions and sales.',
         },
-        { name: '\u200B', value: '\u200B' }
+        { name: '\u200B', value: '\u200B' },
         {
           name: '💬 What does a chatter do?',
           value: 'Your job is to build strong relationships with fans and sell an experience that keeps them spending.',
         },
-        { name: '\u200B', value: '\u200B' }
+        { name: '\u200B', value: '\u200B' },
         {
           name: '⌨️ Why do I need to type over 100 WPM?',
           value: 'We work with extremely high-traffic accounts in the top 0.0001% of accounts in OF — fast typing and thinking are essential.',
         },
-        { name: '\u200B', value: '\u200B' }
+        { name: '\u200B', value: '\u200B' },
         {
           name: '🕓 What are the work hours?',
           value: 'Shifts are flexible. Most people work 6–8 hours/day, 5–6 days a week. You choose your own schedule.',
         },
-        { name: '\u200B', value: '\u200B' }
+        { name: '\u200B', value: '\u200B' },
         {
           name: '🧭 What shift times can I choose from?',
           value:
@@ -117,17 +117,17 @@ client.on(Events.MessageCreate, async (message) => {
             '**GRAVEYARD SHIFT:** 09:00 – 17:00 UK\n' +
             '**AFTERNOON SHIFT:** 17:00 – 01:00 UK',
         },
-        { name: '\u200B', value: '\u200B' }
+        { name: '\u200B', value: '\u200B' },
         {
           name: '💸 How do I get paid and how much?',
           value: 'Paid monthly via bank or crypto. Average chatter earns $3K/month.   top performers make $10K+',
         },
-        { name: '\u200B', value: '\u200B' }
+        { name: '\u200B', value: '\u200B' },
         {
           name: '📝 What’s the hiring process?',
           value: 'Open a ticket, if you are selected then you’ll go through 1–3 weeks of training before being assigned to an account.',
         },
-        { name: '\u200B', value: '\u200B' }
+        { name: '\u200B', value: '\u200B' },
         {
           name: '🎤 Why do I need to send a voice note?',
           value: 'It helps us hear your vibe, energy, and how confident you sound when speaking. Communication is key in our agency.',
