@@ -86,7 +86,7 @@ client.on(Events.MessageCreate, async (message) => {
 
   if (message.content.toLowerCase() === '!faq') {
     const faqEmbed = new EmbedBuilder()
-      .setTitle('📌 ONLYFANS CHATTER AGENCY – FAQ')
+      .setTitle('📌 X RECRUITMENT – FAQ')
       .setColor('#014bac') // Hot pink
 
       .addFields(
