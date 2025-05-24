@@ -107,7 +107,7 @@ client.on(Events.MessageCreate, async (message) => {
         { name: '\u200B', value: '\u200B' },
         {
           name: '🕓 What are the work hours?',
-          value: 'Shifts are flexible. Most people work 6–8 hours/day, 5–6 days a week. You choose your own schedule.',
+          value: 'Shifts are flexible. Most people work 8 hours/day, 6-7 days a week. You choose your own schedule.',
         },
         { name: '\u200B', value: '\u200B' },
         {
