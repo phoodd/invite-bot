@@ -137,3 +137,68 @@ client.on(Events.MessageCreate, async (message) => {
     await message.channel.send({ embeds: [faqEmbed] });
   }
 });
+
+
+
+
+client.on(Events.MessageCreate, async (message) => {
+  if (message.author.bot) return;
+
+  if (message.content.toLowerCase().startsWith('x!panel')) {
+    const lines = message.content.split('\n').slice(1); // skip the command
+    const embed = new EmbedBuilder();
+    const fields = [];
+    let currentField = { name: '', value: '' };
+
+    let color = '#00b0f4'; // default blue
+
+    for (const line of lines) {
+      const [keyRaw, ...rest] = line.split(':');
+      const key = keyRaw.trim().toLowerCase();
+      const value = rest.join(':').trim();
+
+      if (!key) continue;
+
+      switch (key) {
+        case 'title':
+          embed.setTitle(value);
+          break;
+        case 'color':
+          color = value.startsWith('#') ? value : `#${value}`;
+          break;
+        case 'name':
+          if (currentField.name && currentField.value) {
+            fields.push({ ...currentField });
+          }
+          currentField = { name: value, value: '' };
+          break;
+        case 'value':
+          currentField.value += (currentField.value ? '\n' : '') + value;
+          break;
+        case 'enter':
+          const linesToAdd = '\n'.repeat(parseInt(value, 10) || 1);
+          currentField.value += linesToAdd;
+          break;
+      }
+    }
+
+    // Push final field
+    if (currentField.name && currentField.value) {
+      fields.push(currentField);
+    }
+
+    if (fields.length > 0) {
+      embed.addFields(...fields);
+    }
+
+    embed.setColor(color);
+
+    // Handle attachment if there's any
+    const image = message.attachments.first();
+    if (image && image.contentType?.startsWith('image/')) {
+      embed.setImage(image.url);
+    }
+
+    await message.channel.send({ embeds: [embed] });
+  }
+});
