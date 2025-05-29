@@ -63,8 +63,8 @@ client.on(Events.ChannelCreate, async (channel) => {
     setTimeout(async () => {
       try {
         await channel.send(
-          "**How to apply:**\n\n" +
-          ":writing_hand: 1️⃣ ➜ Submit your https://monkeytype.com/ result (30 seconds). PC ONLY\n\n" +
+          "**# How to apply:**\n\n" +
+          ":writing_hand: 1️⃣ ➜ Submit your https://forms.gle/hdiNdsbEbykjgTaVA form (takes 60 seconds)\n\n" +
           ":microphone: 2️⃣ ➜ send us a voice note explaining:\n" +
           "- Why you'd be a great fit,\n" +
           "- A little about your hobbies"
