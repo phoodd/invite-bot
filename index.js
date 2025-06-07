@@ -202,3 +202,24 @@ client.on(Events.MessageCreate, async (message) => {
     await message.channel.send({ embeds: [embed] });
   }
 });
+
+if (message.content.toLowerCase() === 'x!delete') {
+  // Check if user has admin permission
+  if (!message.member.permissions.has('Administrator')) {
+    return message.reply("❌ You don't have permission to use this command.");
+  }
+
+  // Confirm before deleting
+  try {
+    await message.channel.send("⚠️ Deleting channel in 3 seconds...");
+    setTimeout(() => {
+      message.channel.delete().catch(err =>
+        console.error("Failed to delete channel:", err)
+      );
+    }, 3000); // 3-second delay
+  } catch (err) {
+    console.error("Error during channel deletion:", err);
+    message.reply("❌ Failed to delete the channel.");
+  }
+}
+
