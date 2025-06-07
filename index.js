@@ -1,6 +1,6 @@
-const { Client, GatewayIntentBits, Partials, Events } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, Events, EmbedBuilder, PermissionsBitField } = require('discord.js');
 const { config } = require('dotenv');
-config(); // Load DISCORD_TOKEN and GUILD_ID from env
+config(); // Load DISCORD_TOKEN and GUILD_ID from .env
 
 const client = new Client({
   intents: [
@@ -8,13 +8,14 @@ const client = new Client({
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildInvites,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
+    GatewayIntentBits.MessageContent,
   ],
   partials: [Partials.GuildMember],
 });
 
 const invites = new Map();
 
+// When bot is ready
 client.once(Events.ClientReady, async () => {
   console.log(`🤖 Logged in as ${client.user.tag}`);
   const guild = await client.guilds.fetch(process.env.GUILD_ID);
@@ -22,6 +23,7 @@ client.once(Events.ClientReady, async () => {
   invites.set(guild.id, new Map(inviteList.map((inv) => [inv.code, inv.uses])));
 });
 
+// When a new member joins
 client.on(Events.GuildMemberAdd, async (member) => {
   const cachedInvites = invites.get(member.guild.id);
   const newInvites = await member.guild.invites.fetch();
@@ -39,8 +41,8 @@ client.on(Events.GuildMemberAdd, async (member) => {
   }
 
   let roleName = `Invited by ${inviterUsername}`;
-
   let inviterRole = member.guild.roles.cache.find(r => r.name === roleName);
+
   if (!inviterRole) {
     inviterRole = await member.guild.roles.create({
       name: roleName,
@@ -57,9 +59,9 @@ client.on(Events.GuildMemberAdd, async (member) => {
   }
 });
 
-// New channel message with 6 second delay
+// Send auto-message on new channel
 client.on(Events.ChannelCreate, async (channel) => {
-  if (channel.type === 0) { // Text channel
+  if (channel.type === 0) {
     setTimeout(async () => {
       try {
         await channel.send(
@@ -72,23 +74,39 @@ client.on(Events.ChannelCreate, async (channel) => {
       } catch (err) {
         console.error(`Could not send message to ${channel.name}:`, err.message);
       }
-    }, 6000); // 6 seconds delay
+    }, 6000);
   }
 });
 
-client.login(process.env.DISCORD_TOKEN);
-
-
-const { EmbedBuilder } = require('discord.js');
-
+// Handle all message commands
 client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot) return;
 
+  // Delete channel command (admins only)
+  if (message.content.toLowerCase() === 'x!delete') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+      return message.reply("❌ You don't have permission to use this command.");
+    }
+
+    try {
+      await message.channel.send("⚠️ Deleting channel in 3 seconds...");
+      setTimeout(() => {
+        message.channel.delete().catch(err =>
+          console.error("Failed to delete channel:", err)
+        );
+      }, 3000);
+    } catch (err) {
+      console.error("Error during channel deletion:", err);
+      message.reply("❌ Failed to delete the channel.");
+    }
+    return;
+  }
+
+  // FAQ command
   if (message.content.toLowerCase() === '!faq') {
     const faqEmbed = new EmbedBuilder()
       .setTitle('📌 X RECRUITMENT – FAQ')
-      .setColor('#014bac') // Hot blue
-
+      .setColor('#014bac')
       .addFields(
         {
           name: '❓ What is this agency?',
@@ -135,22 +153,17 @@ client.on(Events.MessageCreate, async (message) => {
       );
 
     await message.channel.send({ embeds: [faqEmbed] });
+    return;
   }
-});
 
-
-
-
-client.on(Events.MessageCreate, async (message) => {
-  if (message.author.bot) return;
-
+  // Panel builder command
   if (message.content.toLowerCase().startsWith('x!panel')) {
-    const lines = message.content.split('\n').slice(1); // skip the command
+    const lines = message.content.split('\n').slice(1);
     const embed = new EmbedBuilder();
     const fields = [];
     let currentField = { name: '', value: '' };
 
-    let color = '#00b0f4'; // default blue
+    let color = '#00b0f4'; // default color
 
     for (const line of lines) {
       const [keyRaw, ...rest] = line.split(':');
@@ -182,7 +195,6 @@ client.on(Events.MessageCreate, async (message) => {
       }
     }
 
-    // Push final field
     if (currentField.name && currentField.value) {
       fields.push(currentField);
     }
@@ -193,7 +205,6 @@ client.on(Events.MessageCreate, async (message) => {
 
     embed.setColor(color);
 
-    // Handle attachment if there's any
     const image = message.attachments.first();
     if (image && image.contentType?.startsWith('image/')) {
       embed.setImage(image.url);
@@ -203,23 +214,4 @@ client.on(Events.MessageCreate, async (message) => {
   }
 });
 
-if (message.content.toLowerCase() === 'x!delete') {
-  // Check if user has admin permission
-  if (!message.member.permissions.has('Administrator')) {
-    return message.reply("❌ You don't have permission to use this command.");
-  }
-
-  // Confirm before deleting
-  try {
-    await message.channel.send("⚠️ Deleting channel in 3 seconds...");
-    setTimeout(() => {
-      message.channel.delete().catch(err =>
-        console.error("Failed to delete channel:", err)
-      );
-    }, 3000); // 3-second delay
-  } catch (err) {
-    console.error("Error during channel deletion:", err);
-    message.reply("❌ Failed to delete the channel.");
-  }
-}
-
+client.login(process.env.DISCORD_TOKEN);
