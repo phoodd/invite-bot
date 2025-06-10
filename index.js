@@ -15,7 +15,6 @@ const client = new Client({
 
 const invites = new Map();
 
-// When bot is ready
 client.once(Events.ClientReady, async () => {
   console.log(`🤖 Logged in as ${client.user.tag}`);
   const guild = await client.guilds.fetch(process.env.GUILD_ID);
@@ -23,7 +22,6 @@ client.once(Events.ClientReady, async () => {
   invites.set(guild.id, new Map(inviteList.map((inv) => [inv.code, inv.uses])));
 });
 
-// When a new member joins
 client.on(Events.GuildMemberAdd, async (member) => {
   const cachedInvites = invites.get(member.guild.id);
   const newInvites = await member.guild.invites.fetch();
@@ -59,7 +57,6 @@ client.on(Events.GuildMemberAdd, async (member) => {
   }
 });
 
-// Send auto-message on new channel
 client.on(Events.ChannelCreate, async (channel) => {
   if (channel.type === 0) {
     setTimeout(async () => {
@@ -75,14 +72,31 @@ client.on(Events.ChannelCreate, async (channel) => {
         console.error(`Could not send message to ${channel.name}:`, err.message);
       }
     }, 6000);
+
+    setTimeout(async () => {
+      try {
+        await channel.send("👋 Just a reminder! If you haven’t completed your application yet, please do so soon!");
+      } catch (err) {
+        console.error(`Failed to bump channel ${channel.name}:`, err.message);
+      }
+    }, 6 * 60 * 60 * 1000);
+
+    setTimeout(async () => {
+      try {
+        await channel.send("⏳ This ticket is now being closed due to inactivity.");
+        setTimeout(() => {
+          channel.delete().catch(err => console.error(`Failed to delete channel ${channel.name}:`, err.message));
+        }, 3000);
+      } catch (err) {
+        console.error(`Failed to delete inactive channel ${channel.name}:`, err.message);
+      }
+    }, 24 * 60 * 60 * 1000);
   }
 });
 
-// Handle all message commands
 client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot) return;
 
-  // Delete channel command (admins only)
   if (message.content.toLowerCase() === 'x!delete') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
       return message.reply("❌ You don't have permission to use this command.");
@@ -102,87 +116,42 @@ client.on(Events.MessageCreate, async (message) => {
     return;
   }
 
-  // FAQ command
   if (message.content.toLowerCase() === '!faq') {
     const faqEmbed = new EmbedBuilder()
       .setTitle('📌 X RECRUITMENT – FAQ')
       .setColor('#014bac')
       .addFields(
-        {
-          name: '❓ What is this agency?',
-          value: 'We’re an OnlyFans chatting agency. We partner directly with top models, letting chatters handle fan interactions and sales.',
-        },
-        { name: '\u200B', value: '\u200B' },
-        {
-          name: '💬 What does a chatter do?',
-          value: 'Your job is to build strong relationships with fans and sell an experience that keeps them spending.',
-        },
-        { name: '\u200B', value: '\u200B' },
-        {
-          name: '⌨️ Why do I need to type over 100 WPM?',
-          value: 'We work with extremely high-traffic accounts in the top 0.0001% of accounts in OF — fast typing and thinking are essential.',
-        },
-        { name: '\u200B', value: '\u200B' },
-        {
-          name: '🕓 What are the work hours?',
-          value: 'Shifts are flexible. Most people work 8 hours/day, 6-7 days a week. You choose your own schedule.',
-        },
-        { name: '\u200B', value: '\u200B' },
-        {
-          name: '🧭 What shift times can I choose from?',
-          value:
-            '**MAIN SHIFT:** 01:00 – 09:00 UK\n' +
-            '**GRAVEYARD SHIFT:** 09:00 – 17:00 UK\n' +
-            '**AFTERNOON SHIFT:** 17:00 – 01:00 UK',
-        },
-        { name: '\u200B', value: '\u200B' },
-        {
-          name: '💸 How do I get paid and how much?',
-          value: 'Paid monthly via bank or crypto. Average chatter earns $3K/month.   top performers make $10K+',
-        },
-        { name: '\u200B', value: '\u200B' },
-        {
-          name: '📝 What’s the hiring process?',
-          value: 'Open a ticket, if you are selected then you’ll go through 1–3 weeks of training before being assigned to an account.',
-        },
-        { name: '\u200B', value: '\u200B' },
-        {
-          name: '🎤 Why do I need to send a voice note?',
-          value: 'It helps us hear your vibe, energy, and how confident you sound when speaking. Communication is key in our agency.',
-        },
+        { name: '❓ What is this agency?', value: 'We’re an OnlyFans chatting agency...'},
+        { name: '💬 What does a chatter do?', value: 'Your job is to build strong relationships...'},
+        { name: '⌨️ Why do I need to type over 100 WPM?', value: 'We work with extremely high-traffic accounts...'},
+        { name: '🕓 What are the work hours?', value: 'Shifts are flexible. Most people work 8 hours/day...'},
+        { name: '🧭 What shift times can I choose from?', value: '**MAIN SHIFT:** 01:00 – 09:00 UK\n**GRAVEYARD SHIFT:** 09:00 – 17:00 UK\n**AFTERNOON SHIFT:** 17:00 – 01:00 UK'},
+        { name: '💸 How do I get paid and how much?', value: 'Paid monthly via bank or crypto. Average chatter earns $3K/month...'},
+        { name: '📝 What’s the hiring process?', value: 'Open a ticket, then you’ll go through 1–3 weeks of training...'},
+        { name: '🎤 Why do I need to send a voice note?', value: 'It helps us hear your vibe, energy, and how confident you sound...'}
       );
-
     await message.channel.send({ embeds: [faqEmbed] });
     return;
   }
 
-  // Panel builder command
   if (message.content.toLowerCase().startsWith('x!panel')) {
     const lines = message.content.split('\n').slice(1);
     const embed = new EmbedBuilder();
     const fields = [];
     let currentField = { name: '', value: '' };
-
-    let color = '#00b0f4'; // default color
+    let color = '#00b0f4';
 
     for (const line of lines) {
       const [keyRaw, ...rest] = line.split(':');
       const key = keyRaw.trim().toLowerCase();
       const value = rest.join(':').trim();
-
       if (!key) continue;
 
       switch (key) {
-        case 'title':
-          embed.setTitle(value);
-          break;
-        case 'color':
-          color = value.startsWith('#') ? value : `#${value}`;
-          break;
+        case 'title': embed.setTitle(value); break;
+        case 'color': color = value.startsWith('#') ? value : `#${value}`; break;
         case 'name':
-          if (currentField.name && currentField.value) {
-            fields.push({ ...currentField });
-          }
+          if (currentField.name && currentField.value) fields.push({ ...currentField });
           currentField = { name: value, value: '' };
           break;
         case 'value':
@@ -195,14 +164,8 @@ client.on(Events.MessageCreate, async (message) => {
       }
     }
 
-    if (currentField.name && currentField.value) {
-      fields.push(currentField);
-    }
-
-    if (fields.length > 0) {
-      embed.addFields(...fields);
-    }
-
+    if (currentField.name && currentField.value) fields.push(currentField);
+    if (fields.length > 0) embed.addFields(...fields);
     embed.setColor(color);
 
     const image = message.attachments.first();
@@ -213,18 +176,15 @@ client.on(Events.MessageCreate, async (message) => {
     await message.channel.send({ embeds: [embed] });
   }
 
-    // Rename ticket channel command
   if (message.content.toLowerCase().startsWith('x!rename')) {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
       return message.reply("❌ You don't have permission to rename channels.");
     }
 
     const newName = message.content.slice('x!rename'.length).trim();
-
     if (!newName) {
       return message.reply("❌ Please provide a new name. Example: `x!rename 100wpm-india-18yo`");
     }
-
     if (newName.length > 100) {
       return message.reply("❌ Channel name too long. Must be under 100 characters.");
     }
@@ -236,10 +196,8 @@ client.on(Events.MessageCreate, async (message) => {
       console.error(`Failed to rename channel:`, err);
       await message.reply("❌ Failed to rename the channel. Make sure I have permission.");
     }
-
     return;
   }
-
 });
 
 client.login(process.env.DISCORD_TOKEN);
