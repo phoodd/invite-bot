@@ -1,6 +1,7 @@
+// Full Discord bot with invite tracking, ticket bumping, auto-deletion, and admin commands
 const { Client, GatewayIntentBits, Partials, Events, EmbedBuilder, PermissionsBitField } = require('discord.js');
 const { config } = require('dotenv');
-config(); // Load DISCORD_TOKEN and GUILD_ID from .env
+config(); // Load .env config
 
 const client = new Client({
   intents: [
@@ -14,7 +15,9 @@ const client = new Client({
 });
 
 const invites = new Map();
+const activeTickets = new Map(); // Track activity in tickets
 
+// On bot ready
 client.once(Events.ClientReady, async () => {
   console.log(`🤖 Logged in as ${client.user.tag}`);
   const guild = await client.guilds.fetch(process.env.GUILD_ID);
@@ -22,6 +25,7 @@ client.once(Events.ClientReady, async () => {
   invites.set(guild.id, new Map(inviteList.map((inv) => [inv.code, inv.uses])));
 });
 
+// Track who invited new members
 client.on(Events.GuildMemberAdd, async (member) => {
   const cachedInvites = invites.get(member.guild.id);
   const newInvites = await member.guild.invites.fetch();
@@ -57,8 +61,49 @@ client.on(Events.GuildMemberAdd, async (member) => {
   }
 });
 
+// When a new channel is created (used as a ticket system)
 client.on(Events.ChannelCreate, async (channel) => {
-  if (channel.type === 0) {
+  if (channel.type === 0) { // Text channel
+    const guild = channel.guild;
+    const prospectRole = guild.roles.cache.find(r => r.name.toLowerCase() === 'prospect');
+    if (!prospectRole) return;
+
+    activeTickets.set(channel.id, { prospectSpoke: false });
+
+    // Bump message after 30 seconds (for testing; change to 6hr in production)
+    setTimeout(async () => {
+      if (!activeTickets.get(channel.id)?.prospectSpoke) {
+        try {
+          await channel.send(
+            `Hey <@&${prospectRole.id}>!
+
+This is just a quick bump reminding you to fill out the form and to send a voice note!
+
+Failing to do so within a 24hour period will have this ticket deleted!`
+          );
+        } catch (err) {
+          console.error(`Failed to send bump message in ${channel.name}:`, err.message);
+        }
+      }
+    }, 30000); // 30 sec bump
+
+    // Auto-delete after 30 seconds (for testing; change to 24hr in production)
+    setTimeout(async () => {
+      if (!activeTickets.get(channel.id)?.prospectSpoke) {
+        try {
+          await channel.send("⏳ This ticket is now being closed due to inactivity.");
+          setTimeout(() => {
+            channel.delete().catch(err =>
+              console.error(`Failed to delete channel ${channel.name}:`, err.message)
+            );
+          }, 3000);
+        } catch (err) {
+          console.error(`Failed to delete channel ${channel.name}:`, err.message);
+        }
+      }
+    }, 30000); // 30 sec delete
+
+    // Intro message
     setTimeout(async () => {
       try {
         await channel.send(
@@ -69,71 +114,60 @@ client.on(Events.ChannelCreate, async (channel) => {
           "- A little about your hobbies"
         );
       } catch (err) {
-        console.error(`Could not send message to ${channel.name}:`, err.message);
+        console.error(`Could not send intro message to ${channel.name}:`, err.message);
       }
     }, 6000);
-
-    setTimeout(async () => {
-      try {
-        await channel.send("👋 Just a reminder! If you haven’t completed your application yet, please do so soon!");
-      } catch (err) {
-        console.error(`Failed to bump channel ${channel.name}:`, err.message);
-      }
-    }, 6 * 60 * 60 * 1000);
-
-    setTimeout(async () => {
-      try {
-        await channel.send("⏳ This ticket is now being closed due to inactivity.");
-        setTimeout(() => {
-          channel.delete().catch(err => console.error(`Failed to delete channel ${channel.name}:`, err.message));
-        }, 3000);
-      } catch (err) {
-        console.error(`Failed to delete inactive channel ${channel.name}:`, err.message);
-      }
-    }, 24 * 60 * 60 * 1000);
   }
 });
 
+// On message, mark if a Prospect replied in a ticket
 client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot) return;
 
+  const channelId = message.channel.id;
+  const ticket = activeTickets.get(channelId);
+  if (ticket) {
+    const member = message.member;
+    if (member?.roles.cache.some(r => r.name.toLowerCase() === 'prospect')) {
+      ticket.prospectSpoke = true; // Mark the ticket as active
+      activeTickets.set(channelId, ticket);
+    }
+  }
+
+  // Admin-only delete command
   if (message.content.toLowerCase() === 'x!delete') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
       return message.reply("❌ You don't have permission to use this command.");
     }
-
     try {
       await message.channel.send("⚠️ Deleting channel in 3 seconds...");
-      setTimeout(() => {
-        message.channel.delete().catch(err =>
-          console.error("Failed to delete channel:", err)
-        );
-      }, 3000);
+      setTimeout(() => message.channel.delete().catch(console.error), 3000);
     } catch (err) {
       console.error("Error during channel deletion:", err);
-      message.reply("❌ Failed to delete the channel.");
     }
     return;
   }
 
+  // FAQ command
   if (message.content.toLowerCase() === '!faq') {
     const faqEmbed = new EmbedBuilder()
       .setTitle('📌 X RECRUITMENT – FAQ')
       .setColor('#014bac')
       .addFields(
-        { name: '❓ What is this agency?', value: 'We’re an OnlyFans chatting agency...'},
-        { name: '💬 What does a chatter do?', value: 'Your job is to build strong relationships...'},
-        { name: '⌨️ Why do I need to type over 100 WPM?', value: 'We work with extremely high-traffic accounts...'},
-        { name: '🕓 What are the work hours?', value: 'Shifts are flexible. Most people work 8 hours/day...'},
-        { name: '🧭 What shift times can I choose from?', value: '**MAIN SHIFT:** 01:00 – 09:00 UK\n**GRAVEYARD SHIFT:** 09:00 – 17:00 UK\n**AFTERNOON SHIFT:** 17:00 – 01:00 UK'},
-        { name: '💸 How do I get paid and how much?', value: 'Paid monthly via bank or crypto. Average chatter earns $3K/month...'},
-        { name: '📝 What’s the hiring process?', value: 'Open a ticket, then you’ll go through 1–3 weeks of training...'},
-        { name: '🎤 Why do I need to send a voice note?', value: 'It helps us hear your vibe, energy, and how confident you sound...'}
+        { name: '❓ What is this agency?', value: 'We’re an OnlyFans chatting agency. We partner directly with top models, letting chatters handle fan interactions and sales.' },
+        { name: '💬 What does a chatter do?', value: 'Your job is to build strong relationships with fans and sell an experience that keeps them spending.' },
+        { name: '⌨️ Why do I need to type over 100 WPM?', value: 'We work with extremely high-traffic accounts — fast typing and thinking are essential.' },
+        { name: '🕓 What are the work hours?', value: 'Shifts are flexible. Most people work 8 hours/day, 6-7 days a week. You choose your schedule.' },
+        { name: '🧭 What shift times can I choose from?', value: '**MAIN:** 01:00 – 09:00 UK\n**GRAVEYARD:** 09:00 – 17:00 UK\n**AFTERNOON:** 17:00 – 01:00 UK' },
+        { name: '💸 How do I get paid and how much?', value: 'Paid monthly via bank or crypto. Average chatter earns $3K/month. Top performers earn $10K+.' },
+        { name: '📝 What’s the hiring process?', value: 'Open a ticket. If selected, you’ll go through 1–3 weeks of training before assignment.' },
+        { name: '🎤 Why do I need to send a voice note?', value: 'It helps us hear your vibe and confidence. Communication is key here.' },
       );
     await message.channel.send({ embeds: [faqEmbed] });
     return;
   }
 
+  // Custom panel embed builder
   if (message.content.toLowerCase().startsWith('x!panel')) {
     const lines = message.content.split('\n').slice(1);
     const embed = new EmbedBuilder();
@@ -145,7 +179,6 @@ client.on(Events.MessageCreate, async (message) => {
       const [keyRaw, ...rest] = line.split(':');
       const key = keyRaw.trim().toLowerCase();
       const value = rest.join(':').trim();
-      if (!key) continue;
 
       switch (key) {
         case 'title': embed.setTitle(value); break;
@@ -154,49 +187,37 @@ client.on(Events.MessageCreate, async (message) => {
           if (currentField.name && currentField.value) fields.push({ ...currentField });
           currentField = { name: value, value: '' };
           break;
-        case 'value':
-          currentField.value += (currentField.value ? '\n' : '') + value;
-          break;
-        case 'enter':
-          const linesToAdd = '\n'.repeat(parseInt(value, 10) || 1);
-          currentField.value += linesToAdd;
-          break;
+        case 'value': currentField.value += (currentField.value ? '\n' : '') + value; break;
+        case 'enter': currentField.value += '\n'.repeat(parseInt(value) || 1); break;
       }
     }
-
     if (currentField.name && currentField.value) fields.push(currentField);
     if (fields.length > 0) embed.addFields(...fields);
     embed.setColor(color);
 
     const image = message.attachments.first();
-    if (image && image.contentType?.startsWith('image/')) {
+    if (image?.contentType?.startsWith('image/')) {
       embed.setImage(image.url);
     }
-
     await message.channel.send({ embeds: [embed] });
   }
 
+  // Rename ticket
   if (message.content.toLowerCase().startsWith('x!rename')) {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
       return message.reply("❌ You don't have permission to rename channels.");
     }
-
     const newName = message.content.slice('x!rename'.length).trim();
-    if (!newName) {
-      return message.reply("❌ Please provide a new name. Example: `x!rename 100wpm-india-18yo`");
-    }
-    if (newName.length > 100) {
-      return message.reply("❌ Channel name too long. Must be under 100 characters.");
-    }
+    if (!newName) return message.reply("❌ Provide a new name. Example: `x!rename 100wpm-india-18yo`");
+    if (newName.length > 100) return message.reply("❌ Name too long. Max 100 characters.");
 
     try {
       await message.channel.setName(newName);
       await message.reply(`✅ Channel renamed to **${newName}**`);
     } catch (err) {
       console.error(`Failed to rename channel:`, err);
-      await message.reply("❌ Failed to rename the channel. Make sure I have permission.");
+      await message.reply("❌ Failed to rename. Check my permissions.");
     }
-    return;
   }
 });
 
