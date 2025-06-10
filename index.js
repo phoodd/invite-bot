@@ -101,7 +101,7 @@ Failing to do so within a 24hour period will have this ticket deleted!`
           console.error(`Failed to delete channel ${channel.name}:`, err.message);
         }
       }
-    }, 30000); // 30 sec delete
+    }, 300000); // 30 sec delete
 
     // Intro message
     setTimeout(async () => {
