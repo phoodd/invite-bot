@@ -212,6 +212,34 @@ client.on(Events.MessageCreate, async (message) => {
 
     await message.channel.send({ embeds: [embed] });
   }
+
+    // Rename ticket channel command
+  if (message.content.toLowerCase().startsWith('x!rename')) {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
+      return message.reply("❌ You don't have permission to rename channels.");
+    }
+
+    const newName = message.content.slice('x!rename'.length).trim();
+
+    if (!newName) {
+      return message.reply("❌ Please provide a new name. Example: `x!rename 100wpm-india-18yo`");
+    }
+
+    if (newName.length > 100) {
+      return message.reply("❌ Channel name too long. Must be under 100 characters.");
+    }
+
+    try {
+      await message.channel.setName(newName);
+      await message.reply(`✅ Channel renamed to **${newName}**`);
+    } catch (err) {
+      console.error(`Failed to rename channel:`, err);
+      await message.reply("❌ Failed to rename the channel. Make sure I have permission.");
+    }
+
+    return;
+  }
+
 });
 
 client.login(process.env.DISCORD_TOKEN);
