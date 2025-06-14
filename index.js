@@ -30,11 +30,15 @@ client.on(Events.GuildMemberAdd, async (member) => {
   const cachedInvites = invites.get(member.guild.id);
   const newInvites = await member.guild.invites.fetch();
 
+  // Find the invite that was used
   const usedInvite = newInvites.find((inv) => {
-    const prev = cachedInvites.get(inv.code);
-    return prev !== undefined && inv.uses > prev;
+    // Get the old use count, OR default to 0 if the invite is new
+    const prevUses = cachedInvites.get(inv.code) || 0;
+    // Check if the current uses are greater than the old uses
+    return inv.uses > prevUses;
   });
 
+  // Update the cache with the new invite uses
   invites.set(member.guild.id, new Map(newInvites.map((inv) => [inv.code, inv.uses])));
 
   let inviterUsername = "vanity invite or unknown";
@@ -45,13 +49,29 @@ client.on(Events.GuildMemberAdd, async (member) => {
   let roleName = `Invited by ${inviterUsername}`;
   let inviterRole = member.guild.roles.cache.find(r => r.name === roleName);
 
+  // If the role doesn't exist, create it
   if (!inviterRole) {
-    inviterRole = await member.guild.roles.create({
-      name: roleName,
-      color: 'Random',
-      reason: 'Auto-created invite role',
-    });
+    try {
+        inviterRole = await member.guild.roles.create({
+            name: roleName,
+            color: 'Random',
+            reason: 'Auto-created invite role',
+        });
+        console.log(`✨ Created new role: ${roleName}`);
+    } catch (error) {
+        console.error(`Failed to create role "${roleName}":`, error.message);
+        return; // Stop if role creation fails
+    }
   }
+
+  // Add the role to the new member
+  try {
+    await member.roles.add(inviterRole);
+    console.log(`${member.user.username} joined — assigned role: ${roleName}`);
+  } catch (error) {
+    console.error(`Failed to assign role to ${member.user.username}:`, error.message);
+  }
+});
 
   try {
     await member.roles.add(inviterRole);
