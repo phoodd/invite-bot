@@ -73,13 +73,6 @@ client.on(Events.GuildMemberAdd, async (member) => {
   }
 });
 
-  try {
-    await member.roles.add(inviterRole);
-    console.log(`${member.user.username} joined — assigned role: ${roleName}`);
-  } catch (error) {
-    console.error(`Failed to assign role to ${member.user.username}:`, error.message);
-  }
-});
 
 // When a new channel is created (used as a ticket system)
 client.on(Events.ChannelCreate, async (channel) => {
@@ -95,11 +88,7 @@ client.on(Events.ChannelCreate, async (channel) => {
       if (!activeTickets.get(channel.id)?.prospectSpoke) {
         try {
           await channel.send(
-            `Hey <@&${prospectRole.id}>!
-
-This is just a quick bump reminding you to fill out the form and to send a voice note!
-
-Failing to do so within a 24hour period will have this ticket deleted!`
+            `Hey <@&${prospectRole.id}>!\n\nThis is just a quick bump reminding you to fill out the form and to send a voice note!\n\nFailing to do so within a 24hour period will have this ticket deleted!`
           );
         } catch (err) {
           console.error(`Failed to send bump message in ${channel.name}:`, err.message);
