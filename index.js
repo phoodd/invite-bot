@@ -1,5 +1,5 @@
 // Full Discord bot with invite tracking, ticket bumping, auto-deletion, and admin commands
-const { Client, GatewayIntentBits, Partials, Events, EmbedBuilder, PermissionsBitField } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, Events, EmbedBuilder, PermissionsBitField, AuditLogEvent } = require('discord.js');
 const { config } = require('dotenv');
 config(); // Load .env config
 
@@ -16,13 +16,23 @@ const client = new Client({
 
 const invites = new Map();
 const activeTickets = new Map(); // Track activity in tickets
+const inviterMap = new Map(); // NEW: Track who invited whom <inviterId, [invitedId, invitedId, ...]>
+const ticketOwnerMap = new Map(); // NEW: Track who owns which ticket <channelId, ownerId>
 
 // On bot ready
 client.once(Events.ClientReady, async () => {
   console.log(`🤖 Logged in as ${client.user.tag}`);
-  const guild = await client.guilds.fetch(process.env.GUILD_ID);
-  const inviteList = await guild.invites.fetch();
-  invites.set(guild.id, new Map(inviteList.map((inv) => [inv.code, inv.uses])));
+  // We need to wait a moment for the bot to be fully ready before fetching invites
+  setTimeout(async () => {
+    try {
+        const guild = await client.guilds.fetch(process.env.GUILD_ID);
+        const inviteList = await guild.invites.fetch();
+        invites.set(guild.id, new Map(inviteList.map((inv) => [inv.code, inv.uses])));
+        console.log('✉️ Invites cached successfully.');
+    } catch (error) {
+        console.error('Error fetching initial invites:', error);
+    }
+  }, 1000);
 });
 
 // Track who invited new members
@@ -30,26 +40,26 @@ client.on(Events.GuildMemberAdd, async (member) => {
   const cachedInvites = invites.get(member.guild.id);
   const newInvites = await member.guild.invites.fetch();
 
-  // Find the invite that was used
-  const usedInvite = newInvites.find((inv) => {
-    // Get the old use count, OR default to 0 if the invite is new
-    const prevUses = cachedInvites.get(inv.code) || 0;
-    // Check if the current uses are greater than the old uses
-    return inv.uses > prevUses;
-  });
+  const usedInvite = newInvites.find((inv) => (cachedInvites.get(inv.code) || 0) < inv.uses);
 
-  // Update the cache with the new invite uses
   invites.set(member.guild.id, new Map(newInvites.map((inv) => [inv.code, inv.uses])));
 
+  let inviter = null;
   let inviterUsername = "vanity invite or unknown";
   if (usedInvite?.inviter) {
-    inviterUsername = usedInvite.inviter.username;
+    inviter = usedInvite.inviter;
+    inviterUsername = inviter.username;
+
+    // NEW: Store the relationship between inviter and the new member
+    const invitedBy = inviterMap.get(inviter.id) || [];
+    invitedBy.push(member.id);
+    inviterMap.set(inviter.id, invitedBy);
+    console.log(`📊 ${member.user.username} was invited by ${inviter.username}. Stored in inviterMap.`);
   }
 
   let roleName = `Invited by ${inviterUsername}`;
   let inviterRole = member.guild.roles.cache.find(r => r.name === roleName);
 
-  // If the role doesn't exist, create it
   if (!inviterRole) {
     try {
         inviterRole = await member.guild.roles.create({
@@ -60,11 +70,10 @@ client.on(Events.GuildMemberAdd, async (member) => {
         console.log(`✨ Created new role: ${roleName}`);
     } catch (error) {
         console.error(`Failed to create role "${roleName}":`, error.message);
-        return; // Stop if role creation fails
+        return;
     }
   }
 
-  // Add the role to the new member
   try {
     await member.roles.add(inviterRole);
     console.log(`${member.user.username} joined — assigned role: ${roleName}`);
@@ -78,12 +87,33 @@ client.on(Events.GuildMemberAdd, async (member) => {
 client.on(Events.ChannelCreate, async (channel) => {
   if (channel.type === 0) { // Text channel
     const guild = channel.guild;
+
+    // NEW: Use Audit Logs to find out who created the channel
+    // This requires the 'View Audit Log' permission for the bot
+    try {
+        const auditLogs = await guild.fetchAuditLogs({
+            limit: 1,
+            type: AuditLogEvent.ChannelCreate,
+        });
+        const channelLog = auditLogs.entries.first();
+        if (channelLog) {
+            const { executor, target } = channelLog;
+            // Check if the log is for the channel that was just created
+            if (target.id === channel.id) {
+                ticketOwnerMap.set(channel.id, executor.id);
+                console.log(`✅ Ticket channel "${channel.name}" created by ${executor.username}. Stored in ticketOwnerMap.`);
+            }
+        }
+    } catch (error) {
+        console.error("Could not fetch audit logs. Does the bot have 'View Audit Log' permissions?", error);
+    }
+    
     const prospectRole = guild.roles.cache.find(r => r.name.toLowerCase() === 'prospect');
     if (!prospectRole) return;
 
     activeTickets.set(channel.id, { prospectSpoke: false });
 
-    // Bump message after 30 seconds (for testing; change to 6hr in production)
+    // Auto-bump message after 4 hours
     setTimeout(async () => {
       if (!activeTickets.get(channel.id)?.prospectSpoke) {
         try {
@@ -94,9 +124,9 @@ client.on(Events.ChannelCreate, async (channel) => {
           console.error(`Failed to send bump message in ${channel.name}:`, err.message);
         }
       }
-    }, 14400000); // 30 sec bump
+    }, 14400000); // 4 hours
 
-    // Auto-delete after 30 seconds (for testing; change to 24hr in production)
+    // Auto-delete after 24 hours
     setTimeout(async () => {
       if (!activeTickets.get(channel.id)?.prospectSpoke) {
         try {
@@ -107,10 +137,10 @@ client.on(Events.ChannelCreate, async (channel) => {
             );
           }, 3000);
         } catch (err) {
-          console.error(`Failed to delete channel ${channel.name}:`, err.message);
+          console.error(`Failed to send auto-delete message in ${channel.name}:`, err.message);
         }
       }
-    }, 86400000); // 30 sec delete
+    }, 86400000); // 24 hours
 
     // Intro message
     setTimeout(async () => {
@@ -129,19 +159,73 @@ client.on(Events.ChannelCreate, async (channel) => {
   }
 });
 
-// On message, mark if a Prospect replied in a ticket
+// NEW: When a channel is deleted, remove it from the ticket owner map
+client.on(Events.ChannelDelete, (channel) => {
+    if (ticketOwnerMap.has(channel.id)) {
+        ticketOwnerMap.delete(channel.id);
+        console.log(`🗑️ Ticket channel "${channel.name}" deleted. Removed from ticketOwnerMap.`);
+    }
+});
+
+
+// On message, handle commands and track ticket activity
 client.on(Events.MessageCreate, async (message) => {
-  if (message.author.bot) return;
+  if (message.author.bot || !message.guild) return;
 
   const channelId = message.channel.id;
   const ticket = activeTickets.get(channelId);
   if (ticket) {
     const member = message.member;
     if (member?.roles.cache.some(r => r.name.toLowerCase() === 'prospect')) {
-      ticket.prospectSpoke = true; // Mark the ticket as active
+      ticket.prospectSpoke = true;
       activeTickets.set(channelId, ticket);
     }
   }
+
+  // --- NEW COMMAND: x/tickets ---
+  if (message.content.toLowerCase() === 'x/tickets') {
+    const inviterId = message.author.id;
+    const invitedUsers = inviterMap.get(inviterId) || [];
+
+    if (invitedUsers.length === 0) {
+        return message.reply({
+            content: "You haven't invited anyone who has joined the server yet, or they haven't created any tickets.",
+            ephemeral: true // Visible only to the command user
+        });
+    }
+
+    const userTickets = [];
+    // Iterate through all tickets the bot knows about
+    for (const [ticketChannelId, ownerId] of ticketOwnerMap.entries()) {
+        // Check if the ticket owner is one of the users invited by the command author
+        if (invitedUsers.includes(ownerId)) {
+            const ticketChannel = message.guild.channels.cache.get(ticketChannelId);
+            if (ticketChannel) { // Ensure the channel still exists
+                userTickets.push(ticketChannel.name);
+            }
+        }
+    }
+    
+    if (userTickets.length === 0) {
+        return message.reply({
+            content: "None of the users you invited have created a ticket yet.",
+            ephemeral: true
+        });
+    }
+
+    const embed = new EmbedBuilder()
+      .setTitle('Your Active Tickets')
+      .setDescription('Here are the current active tickets from members you invited:')
+      .setColor('#014bac')
+      .addFields({ name: 'Ticket Names', value: userTickets.map(name => `\`${name}\``).join('\n') });
+
+    return message.reply({
+        embeds: [embed],
+        ephemeral: true // Visible only to the command user
+    });
+  }
+  // --- END of x/tickets command ---
+
 
   // Admin-only delete command
   if (message.content.toLowerCase() === 'x!delete') {
